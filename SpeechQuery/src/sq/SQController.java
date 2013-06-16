@@ -102,9 +102,9 @@ public class SQController implements ActionListener{
 				tsearchKey = fe.index(recorder.getStream(), 0);
 				tsearchMelody = fe.pitchValues;
 				tsearchRhythm = fe.beats;
-//				view.addText("Searching in Database...");
-//			    String matches = model.match(tsearchKey);
-//			    view.addText(matches);
+				view.addText("Searching in Database...");
+			    String matches = model.match(tsearchKey);
+			    view.addText(matches);
 				//if matches > 1
 //				//rhythm detect
 //				//melody extract

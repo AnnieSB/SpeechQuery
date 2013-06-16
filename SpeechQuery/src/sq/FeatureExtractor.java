@@ -1,6 +1,8 @@
 package sq;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import org.apache.commons.math3.stat.descriptive.moment.StandardDeviation;
@@ -80,12 +82,15 @@ public class FeatureExtractor {
 		//FFT of the audio signal
 		Complex[][] data = transform(audio);
 		
+		long startTime = System.nanoTime();
 		//Melody extraction:
 		pitchValues = new double[data.length];
 		for(int i=0; i<data.length;i++){
 			pitchValues[i] = computePitch(data[i]);	
 		}
+		System.out.println("Melody extraction: " + ((System.nanoTime() - startTime)%1000000) + " ms");
 		
+		startTime = System.nanoTime();
 		//Rhythm detection
 		beats = new double[data.length];
 		for(int j=0; j<data.length;j++){
@@ -105,9 +110,12 @@ public class FeatureExtractor {
 		for(int n=0; n<beats.length;n++){
 			beats[n] = (beats[n] - beats[minIndex]) / o;
 		}
+		System.out.println("Rhythm extraction: " + ((System.nanoTime() - startTime)%1000000 + " ms"));
 		
+		startTime = System.nanoTime();
 		//fingerprint
 		Map<Long, DataPoint> fingerprint = computeAF(data,songIndex);
+		System.out.println("AF: " + ((System.nanoTime() - startTime)%1000000) + " ms");
 		
 		return fingerprint;
 	}
@@ -134,17 +142,17 @@ public class FeatureExtractor {
 		      
 		    //find the nearest note:
 		      int nearestNoteDelta=0;
-		      while( true ) {
-		          if( nearestNoteDelta < maxIndex && !noteNameTable[maxIndex-nearestNoteDelta].equals("") ) {
-		             nearestNoteDelta = -nearestNoteDelta;
-		             break;
-		          } else if( nearestNoteDelta + maxIndex < Harvester.CHUNK_SIZE && !noteNameTable[maxIndex+nearestNoteDelta].equals("") ) {
-		             break;
-		          }
-		          ++nearestNoteDelta;
-		       }
+//		      while( true ) {
+//		          if( nearestNoteDelta < maxIndex && !noteNameTable[maxIndex-nearestNoteDelta].equals("") ) {
+//		             nearestNoteDelta = -nearestNoteDelta;
+//		             break;
+//		          } else if( nearestNoteDelta + maxIndex < Harvester.CHUNK_SIZE && !noteNameTable[maxIndex+nearestNoteDelta].equals("") ) {
+//		             break;
+//		          }
+//		          ++nearestNoteDelta;
+//		       }
 		      
-		      double nearestNotePitch = notePitchTable[maxIndex+nearestNoteDelta];
+		      double nearestNotePitch = notePitchTable[maxIndex];
 		      
 		      return nearestNotePitch;
 	}
@@ -161,9 +169,11 @@ public class FeatureExtractor {
 	}
 	
 	
-	public static final int[] RANGE = new int[] {40,80,120,180, Harvester.UPPER_LIMIT+1};
+	public static final int[] RANGE = new int[] {40,80,120,180,240, Harvester.UPPER_LIMIT+1};
 	public double[] highscores = new double[RANGE.length];
 	public int[] recordPoints = new int[RANGE.length];
+	public int[] secondRecordPoints = new int[RANGE.length];
+	public int[] thirdRecordPoints = new int[RANGE.length];
 	String recordNumbers = "";
 	
 	/**
@@ -183,14 +193,16 @@ public class FeatureExtractor {
 			    int index = getIndex(freq);
 			    //Save the highest magnitude and corresponding frequency:
 			    if (mag > highscores[index]) {
+			    	thirdRecordPoints[index] = secondRecordPoints[index];
+			    	secondRecordPoints[index] = recordPoints[index];
 			        highscores[index] = mag;
 			        recordPoints[index] = freq;
 			    }
 		}
 		
 		 //Punkte als Text speichern
-		 for(int k=0; k <4;k++){
-			 recordNumbers = recordNumbers + recordPoints[k] + "\t";
+		 for(int k=0; k <5;k++){
+			 recordNumbers = recordNumbers + recordPoints[k] + "," + secondRecordPoints[k] + "," + thirdRecordPoints[k] + "\t";
 			 
 		 }
 		 
@@ -202,7 +214,10 @@ public class FeatureExtractor {
 				 dp = new DataPoint(songID, i);
 				// datapoints.add(dp);
 			 //} 
-			hashcodes.put(hash(recordNumbers), dp);	
+		    List<Long> hashes = hash(recordNumbers);
+		    for(int n=0; n<hashes.size();n++){
+			   hashcodes.put(hashes.get(n), dp);	
+		    }
 
 			//Reset recordNumbers
 			recordNumbers = "";
@@ -220,21 +235,28 @@ public class FeatureExtractor {
 	
 	//hashing
 	private static final int FUZ_FACTOR = 2;
-
+	
 	/**
 	 * This method creates a hash code for the retrieved key points sequence.
 	 * @param keypoints
 	 * @return
 	 */
-	private long hash(String line) {
+	private List<Long> hash(String line) {
 	    String[] p = line.split("\t");
-	    long p1 = Long.parseLong(p[0]);
-	    long p2 = Long.parseLong(p[1]);
-	    long p3 = Long.parseLong(p[2]);
-	    long p4 = Long.parseLong(p[3]);
-	    
-	    long result = (p4-(p4%FUZ_FACTOR)) * 100000000 + (p3-(p3%FUZ_FACTOR)) * 100000 + (p2-(p2%FUZ_FACTOR)) * 100 + (p1-(p1%FUZ_FACTOR));
-	    return result;
+	    List<Long> results = new ArrayList<Long>();
+	    long p1;
+	    long p2;
+	    long p3;
+	    for(int i=0; i<p.length; i++){
+	    	String[] ppoints = p[i].split(",");
+	    	p1 = Long.parseLong(ppoints[0]);
+	    	p2 = Long.parseLong(ppoints[1]);
+	    	p3 = Long.parseLong(ppoints[2]);
+	    	results.add((p1-(p1%FUZ_FACTOR) * 100 + (p2-(p2%FUZ_FACTOR))));
+	    	results.add((p1-(p1%FUZ_FACTOR)) * 100 + (p3-(p3%FUZ_FACTOR)));
+//	    	results.add((p2-(p2%FUZ_FACTOR)) * 100 + (p3-(p3%FUZ_FACTOR)));
+	    }
+	    return results;
 	}
 	
 	/**

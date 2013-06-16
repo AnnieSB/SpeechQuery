@@ -69,6 +69,7 @@ public class SQModel extends Observable{
                     // TODO Auto-generated catch block 
                     e.printStackTrace(); 
                 } 
+                
                 Map<Long,DataPoint> tmp = fe.index(fileStream,index); 
                 //am Anfang Platzhalter für Spracheingabe freihalten 
                 if(index==1) 
@@ -131,15 +132,60 @@ public class SQModel extends Observable{
         } 
           
         //String matchesFound = "Matches found:"; 
-//        String matchesFound = sortByOccurrence(matches); 
-//      for(Map.Entry<DataPoint,Integer> entry : matches.entrySet()){ 
-//           
-//          matchesFound = matchesFound + entry.getKey().getSongId() + " with " +entry.getValue() + " match(es). \n"; 
-//      } 
+        String matchesFound = sortByOccurrence(matches); 
           
-//        return matchesFound; 
-        return null;
-    }
+        return matchesFound;     
+        }
+    
+    /** 
+     * This method sort the map containing all the matching candidates by an descending order and returns a String  
+     * representation of it. 
+     * @param matches 
+     * @return 
+     */
+    private String sortByOccurrence(Map<DataPoint,Integer> matches){ 
+        //sortieren 
+        List list = new LinkedList(matches.entrySet()); 
+           
+        // sort list based on comparator 
+        Collections.sort(list, new Comparator() { 
+            public int compare(Object o1, Object o2) { 
+                return ((Comparable) ((Map.Entry) (o2)).getValue()) 
+                                       .compareTo(((Map.Entry) (o1)).getValue()); 
+            } 
+        }); 
+          
+        // put sorted list into map again 
+                //LinkedHashMap make sure order in which keys were inserted 
+        Map<DataPoint,Integer> tmp = new LinkedHashMap<DataPoint,Integer>(); 
+        for (Iterator it = list.iterator(); it.hasNext();) { 
+            Map.Entry<DataPoint,Integer> entry = (Entry<DataPoint, Integer>) it.next(); 
+            tmp.put(entry.getKey(), entry.getValue()); 
+        } 
+        Map<DataPoint,Integer> sortedMap = new TreeMap<DataPoint,Integer>(); 
+        sortedMap.putAll(tmp); 
+          
+        String resultString; 
+        if(sortedMap.size() != 0){ 
+            if(sortedMap.size() == 1) 
+                resultString = "Match found: " +  "\n"; 
+            else
+                resultString = "Matches found: " +  "\n"; 
+        int songID = 0; 
+        for(Map.Entry<DataPoint,Integer> entry : sortedMap.entrySet()){ 
+            songID = entry.getKey().getSongId(); 
+            //if(!resultString.contains("" + songID)) 
+            if(entry.getValue() == 1) 
+                resultString = resultString + songList.get(songID) + " with " + entry.getValue() + " match." + "\n"; 
+            else
+                resultString = resultString + songList.get(songID) + " with " + entry.getValue() + " matches." + "\n"; 
+        } 
+        } 
+        else{ 
+            resultString = "No matches found! \n"; 
+        } 
+        return resultString; 
+    } 
     
     private void sortByMelodyScore(){
     	
