@@ -5,5 +5,7 @@ public class Harvester {
     public static int LOWER_LIMIT = 40;
     public static int UPPER_LIMIT = 300;
     public static int[] RANGE = new int[] {80, 120, 180, 240,300};
+    public static int J = 1000;
+    public static int SAMPLE_RATE = 44100;
 
 }

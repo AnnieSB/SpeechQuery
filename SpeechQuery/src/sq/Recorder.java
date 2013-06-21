@@ -75,6 +75,7 @@ public class Recorder {
 	 * @throws IOException
 	 */
 	public byte[] captureAudioFile(File file) throws UnsupportedAudioFileException, IOException{
+		long startTime = System.nanoTime();
 		int totalFramesRead = 0;
 		AudioInputStream ais = AudioSystem.getAudioInputStream(file);
 		int bytesPerFrame = ais.getFormat().getFrameSize();
@@ -102,6 +103,7 @@ public class Recorder {
 		    // Handle the error...
 			  ex.printStackTrace();
 		  }
+		  System.out.println("Capture time: " + (System.nanoTime() - startTime));
 		  return data;
 	}
 	

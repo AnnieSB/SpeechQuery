@@ -3,7 +3,6 @@ package sq;
 import java.io.IOException;
 
 import javax.sound.sampled.LineUnavailableException;
-import javax.swing.JFileChooser;
 
 
 
@@ -13,28 +12,43 @@ import javax.swing.JFileChooser;
  * 
  * This class is used to start the application.
  */
-public class Main {
-
+public class Main{
 	
 	public static void main (String[] args) throws IOException, LineUnavailableException{
 		
 
 		Recorder rc = new Recorder();
-		FeatureExtractor fe = new FeatureExtractor();
-		
-		//Songdatenbank laden
-		SQModel m = new SQModel( rc,fe);
+		SQModel m = new SQModel( rc);
 		
 		//Als User input einfügen!
-		JFileChooser fc = new JFileChooser();
+		String path;
 		
-		String path = "C:\\Users\\PhuongAnh\\Desktop\\phatt_y_wave\\2263";
-		//m.buildAudioDB(path);
+//		JFrame frame = new JFrame();
+//		JFileChooser fc = new JFileChooser();
+//		fc.setDialogTitle("Select Speech Database...");
+//		fc.setFileSelectionMode(JFileChooser.DIRECTORIES_ONLY);
+//		
+//		int returnVal = fc.showOpenDialog(frame);
+//		File file = null;
+//		if (returnVal == JFileChooser.APPROVE_OPTION) {
+//            file = fc.getSelectedFile();} 
+//		if(file != null)
+//		    path = file.getAbsolutePath();
 		
-		// Dialog : "Loading Database..." -> mit progression bar!
+		//Testzwecke
+		path = "C:\\Users\\PhuongAnh\\Desktop\\SpeechDB";
+		m.buildAudioDB(path);
+		
+		// Progress Bar
+//		JProgressBar progressBar = new JProgressBar(0, task.getLengthOfTask());
+//		
+//		//Where the GUI is constructed:
+//		progressBar.setValue(0);
+		
 		
 		//Starte GUI
-		SQController c = new SQController(rc, m,fe);
+		SQController c = new SQController(rc, m);
 	}
+
 	
 }

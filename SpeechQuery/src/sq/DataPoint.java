@@ -1,6 +1,6 @@
  package sq;
 
-public class DataPoint implements Comparable{
+public class DataPoint implements Comparable<DataPoint>{
 
 	private int time;
 	private int songId;
@@ -19,7 +19,7 @@ public class DataPoint implements Comparable{
 	    }
 
 		@Override
-		public int compareTo(Object o) {
+		public int compareTo(DataPoint o) {
 			// TODO Auto-generated method stub
 			
 			return (this.songId - ((DataPoint) o).getSongId());

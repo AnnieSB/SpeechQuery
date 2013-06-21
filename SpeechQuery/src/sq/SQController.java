@@ -9,6 +9,11 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 
 import javax.sound.sampled.AudioFormat;
 import javax.sound.sampled.AudioInputStream;
@@ -28,7 +33,7 @@ public class SQController implements ActionListener{
 	SpeechQueryView view;
 	SQModel model;
 	Recorder recorder;
-	FeatureExtractor fe;
+	//FeatureExtractor fe;
 	
 	boolean recordClicked = false;
 	boolean playClicked = false;
@@ -37,9 +42,11 @@ public class SQController implements ActionListener{
 	double[] tsearchMelody;
 	double[] tsearchRhythm;
 	
-	List<byte[]> inputList = new ArrayList<byte[]>();
+	ExecutorService thread;
 	
-	public SQController( Recorder recorder, SQModel model, FeatureExtractor fe){
+	List<byte[]> inputList = new ArrayList<byte[]>();
+
+	public SQController( Recorder recorder, SQModel model){
 		
 		view = new SpeechQueryView(this);
 	    view.setVisible(true);
@@ -48,9 +55,11 @@ public class SQController implements ActionListener{
 	    model.addObserver(view);
 	    
 	    this.recorder = recorder;
-	    this.fe = fe;
+	    //this.fe = fe;
 	    
 	    tsearchKey = new HashMap<Long, DataPoint>();
+	    
+	    thread = Executors.newSingleThreadExecutor();
 	}
 
 	@Override
@@ -99,9 +108,21 @@ public class SQController implements ActionListener{
 			
 			if(recorder.getStream().length!=0){
 				view.addText("Indexing the search input...");
-				tsearchKey = fe.index(recorder.getStream(), 0);
-				tsearchMelody = fe.pitchValues;
-				tsearchRhythm = fe.beats;
+				//tsearchKey = fe.index(recorder.getStream(), 0);
+				Complex[][] data = DFT.transform(recorder.getStream());
+				Callable<Map<Long,DataPoint>> fe = new AcousticFingerprinter(data,0);
+				Future<Map<Long,DataPoint>> fu = thread.submit(fe);
+				try {
+					tsearchKey = fu.get();
+				} catch (InterruptedException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+				} catch (ExecutionException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+				}
+//				tsearchMelody = fe.pitchValues;
+//				tsearchRhythm = fe.beats;
 				view.addText("Searching in Database...");
 			    String matches = model.match(tsearchKey);
 			    view.addText(matches);
