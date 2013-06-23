@@ -19,6 +19,8 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 
+import javax.sound.sampled.AudioInputStream;
+import javax.sound.sampled.AudioSystem;
 import javax.sound.sampled.LineUnavailableException;
 import javax.sound.sampled.UnsupportedAudioFileException;
 
@@ -47,16 +49,19 @@ public class SQModel extends Observable{
      * This method reads all the speech recordings and creates the database. 
      * @param path 
      * @throws LineUnavailableException 
+	 * @throws IOException 
+	 * @throws UnsupportedAudioFileException 
      */
-    public void buildAudioDB(String path) throws LineUnavailableException{ 
+    public void buildAudioDB(String path) throws LineUnavailableException, UnsupportedAudioFileException, IOException{ 
         hashDB = new ArrayList<Map<Long,DataPoint>>(); 
         melodyScores = new HashMap<Integer, double[]>();
         rhythmScores = new HashMap<Integer, double[]>();
         songList = new ArrayList<String>(); 
+        
         //Platzhalter für sample Sprachinput 
         songList.add(0,null); 
         int index = 1; 
-        byte[] fileStream; 
+       
         //ToDo: Datenbank entsprechend speichern! 
         
         System.out.println("Loading speech recordings..."); 
@@ -64,8 +69,8 @@ public class SQModel extends Observable{
         File folder = new File(path); 
         
         //Thread pool management
-        ExecutorService afThreads = Executors.newCachedThreadPool();
-        List<Future<Map<Long,DataPoint>>> fingerprints = new ArrayList<Future<Map<Long,DataPoint>>>();
+//        ExecutorService afThreads = Executors.newCachedThreadPool();
+//        List<Future<Map<Long,DataPoint>>> fingerprints = new ArrayList<Future<Map<Long,DataPoint>>>();
         
         ExecutorService meThreads = Executors.newCachedThreadPool();
         List<Future<double[]>> mScores = new ArrayList<Future<double[]>>();
@@ -73,34 +78,75 @@ public class SQModel extends Observable{
         ExecutorService rdThreads = Executors.newCachedThreadPool();
         List<Future<double[]>> rScores = new ArrayList<Future<double[]>>();
         
+		int totalFramesRead;
+		AudioInputStream ais;
+		int bytesPerFrame;
+		int numBytes;
+		byte[] audioBytes;
+		Complex[][] tData;
+		Complex[][] tData_complete;
+		Complex[][] tmp;
         for (File file : folder.listFiles()){ 
             if (file.isFile() && (file.getName().contains(".wav") || file.getName().contains(".mp3"))){ 
                 songList.add(index, file.getName()); 
-                fileStream = null; 
+                
+                totalFramesRead = 0;
+                ais = AudioSystem.getAudioInputStream(file);
+                bytesPerFrame = ais.getFormat().getFrameSize();
+        		numBytes = 44100 * bytesPerFrame;
+        		audioBytes = new byte[numBytes];
+        		tData_complete = null;
+        		tData = null;
                 try { 
-                    fileStream = rc.captureAudioFile(file); 
-                } catch (UnsupportedAudioFileException e) { 
-                    // TODO Auto-generated catch block 
-                    e.printStackTrace(); 
+                    //fileStream = rc.captureAudioFile(file);
+                    int numBytesRead = 0;
+        		    int numFramesRead = 0;
+        		    // Try to read numBytes bytes from the file.
+        		    while ((numBytesRead = ais.read(audioBytes)) != -1) {
+        		      // Calculate the number of frames actually read.
+        		      numFramesRead = numBytesRead / bytesPerFrame;
+        		      totalFramesRead += numFramesRead;
+        		      // Here, do something useful with the audio data that's 
+        		      // now in the audioBytes array...
+        		      //rhythm detection
+        		      tData = DFT.transform(audioBytes);
+        		      if(tData_complete == null)
+        		    	  tData_complete = tData;
+        		      else{
+        		          tmp = tData_complete;
+        		          tData_complete = new Complex[tmp.length + tData.length][];
+        		          System.arraycopy(tmp, 0, tData_complete, 0, tmp.length);
+        		          System.arraycopy(tData, 0, tData_complete, tmp.length, tData.length);
+        		      }
+        		    }
+        		    ais.close();
                 } catch (IOException e) { 
                     // TODO Auto-generated catch block 
                     e.printStackTrace(); 
                 } 	
                 
-                long startime = System.nanoTime();
-                Complex[][] tData = DFT.transform(fileStream);
-                System.out.println("Transformation time: " + (System.nanoTime() - startime));
+//                long startime = System.nanoTime();
+//                //Complex[][] tData = DFT.transform(fileStream);
+//                System.out.println("Transformation time: " + (System.nanoTime() - startime));
                 //Map<Long,DataPoint> tmp = fe.index(fileStream,index); 
                 
-                Callable<Map<Long,DataPoint>> afWorker = new AcousticFingerprinter(tData,index);
-                Future<Map<Long,DataPoint>> afSubmit = afThreads.submit(afWorker);
-                fingerprints.add(afSubmit);
+//                Callable<Map<Long,DataPoint>> afWorker = new AcousticFingerprinter(tData_complete,index);
+//                Future<Map<Long,DataPoint>> afSubmit = afThreads.submit(afWorker);
+//                fingerprints.add(afSubmit);
                 
-                Callable<double[]> meWorker = new MelodyExtractor(tData);
+                AcousticFingerprinter af = new AcousticFingerprinter(tData_complete, index);
+                if(index==1)
+            		hashDB.add(0,null);
+                startTime = System.nanoTime();
+    			hashDB.add(index, af.computeAF(tData_complete, index));
+    			System.out.println("AF: " + ((System.nanoTime() - startTime)%1000000) + " ms");
+                
+                
+                Callable<double[]> meWorker = new MelodyExtractor(tData_complete);
                 Future<double[]> meSubmit = meThreads.submit(meWorker);
                 mScores.add(meSubmit);
                 
-                Callable<double[]> rdWorker = new RhythmDetector(tData,index);
+                Callable<double[]> rdWorker = new RhythmDetector(tData_complete,index);
                 Future<double[]> rdSubmit = rdThreads.submit(rdWorker);
                 rScores.add(rdSubmit);
       
@@ -120,20 +166,20 @@ public class SQModel extends Observable{
 //                hashDB.add(0,null); 
 //            hashDB.add(index,tmp); 
         }
-        try {
-			System.out.println( "FP size: "+ fingerprints.get(2).get().size());
-		} catch (InterruptedException e1) {
-			// TODO Auto-generated catch block
-			e1.printStackTrace();
-		} catch (ExecutionException e1) {
-			// TODO Auto-generated catch block
-			e1.printStackTrace();
-		}
-        for(int k=0; k<fingerprints.size(); k++){
-        	if(k==0)
-        		hashDB.add(0,null);
+//        try {
+//			System.out.println( "FP size: "+ fingerprints.get(2).get().size());
+//		} catch (InterruptedException e1) {
+//			// TODO Auto-generated catch block
+//			e1.printStackTrace();
+//		} catch (ExecutionException e1) {
+//			// TODO Auto-generated catch block
+//			e1.printStackTrace();
+//		}
+        for(int k=0; k<melodyScores.size(); k++){
+//        	if(k==0)
+//        		hashDB.add(0,null);
         	try {
-				hashDB.add(k+1, fingerprints.get(k).get());
+				//hashDB.add(k+1, fingerprints.get(k).get());
 				melodyScores.put(k+1,mScores.get(k).get());
 				rhythmScores.put(k+1, rScores.get(k).get());
 			} catch (InterruptedException e) {
@@ -145,7 +191,7 @@ public class SQModel extends Observable{
         
         System.out.println("Total loading time: " + ((System.nanoTime() - startTime)%1000000) + " ms");
         System.out.println("Song DataBase loaded! " + "Total: " + (hashDB.size()-1) + ". "); 
-        afThreads.shutdown();
+        //afThreads.shutdown();
         meThreads.shutdown();
         rdThreads.shutdown();
     } 

@@ -3,6 +3,7 @@ package sq;
 import java.io.IOException;
 
 import javax.sound.sampled.LineUnavailableException;
+import javax.sound.sampled.UnsupportedAudioFileException;
 
 
 
@@ -37,7 +38,12 @@ public class Main{
 		
 		//Testzwecke
 		path = "C:\\Users\\PhuongAnh\\Desktop\\SpeechDB";
-		m.buildAudioDB(path);
+		try {
+			m.buildAudioDB(path);
+		} catch (UnsupportedAudioFileException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
 		
 		// Progress Bar
 //		JProgressBar progressBar = new JProgressBar(0, task.getLengthOfTask());

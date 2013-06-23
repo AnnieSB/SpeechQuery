@@ -60,6 +60,8 @@ public class AcousticFingerprinter implements Callable<Map<Long,DataPoint>>{
 		Map<Long,DataPoint> hashcodes = new HashMap<Long,DataPoint>();
 		//List<DataPoint> datapoints = new ArrayList<DataPoint>();
 		
+		System.out.println(results.length);
+		DataPoint dp;
 		for(int i = 0; i < results.length; i++) {
 		for (int freq = Harvester.LOWER_LIMIT; freq < Harvester.UPPER_LIMIT-1; freq++) {
 			    //Get the magnitude:
@@ -82,13 +84,9 @@ public class AcousticFingerprinter implements Callable<Map<Long,DataPoint>>{
 		 }
 		 
 		 //Hashes generieren und mit DataPunkten in HashDB speichern
-		 DataPoint dp;
-
-			//for(int j=0; j<recordPoints.length;j++){
-				 //Zeit herausfinden
+		 
 				 dp = new DataPoint(songID, i);
-				// datapoints.add(dp);
-			 //} 
+				 
 		    List<Long> hashes = hash(recordNumbers);
 		    for(int n=0; n<hashes.size();n++){
 			   hashcodes.put(hashes.get(n), dp);	

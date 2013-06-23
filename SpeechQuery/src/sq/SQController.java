@@ -112,6 +112,7 @@ public class SQController implements ActionListener{
 				Complex[][] data = DFT.transform(recorder.getStream());
 				Callable<Map<Long,DataPoint>> fe = new AcousticFingerprinter(data,0);
 				Future<Map<Long,DataPoint>> fu = thread.submit(fe);
+				
 				try {
 					tsearchKey = fu.get();
 				} catch (InterruptedException e) {
