@@ -16,10 +16,6 @@ public class RhythmDetector implements Callable<double[]>{
 	int songIndex;
 	double[] beats;
 	
-	public RhythmDetector(Complex[][]data, int songIndex){
-		this.data = data;
-		this.songIndex = songIndex;
-	}
 	
 	@Override
 	public double[] call() throws Exception {
@@ -50,7 +46,7 @@ public class RhythmDetector implements Callable<double[]>{
 		return beats;
 	}
 	
-	private double computeRhythm(Complex[] data){
+	public static double computeRhythm(Complex[] data){
 		double value = 0;
 		for(int i=0; i<Harvester.CHUNK_SIZE;i++){
 			value += data[i].abs() * data[i].abs();

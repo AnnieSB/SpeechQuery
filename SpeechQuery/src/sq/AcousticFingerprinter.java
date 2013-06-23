@@ -45,11 +45,10 @@ public class AcousticFingerprinter implements Callable<Map<Long,DataPoint>>{
 	
 	
 	public static final int[] RANGE = new int[] {40,80,120,180,240, Harvester.UPPER_LIMIT+1};
-	public double[] highscores = new double[RANGE.length];
-	public int[] recordPoints = new int[RANGE.length];
-	public int[] secondRecordPoints = new int[RANGE.length];
-	public int[] thirdRecordPoints = new int[RANGE.length];
-	String recordNumbers = "";
+	public static double[] highscores = new double[RANGE.length];
+	public static int[] recordPoints = new int[RANGE.length];
+	public static int[] secondRecordPoints = new int[RANGE.length];
+	public static int[] thirdRecordPoints = new int[RANGE.length];
 	
 	/**
 	 * This method determines the key music points of the transformed input data.
@@ -62,6 +61,7 @@ public class AcousticFingerprinter implements Callable<Map<Long,DataPoint>>{
 		
 		System.out.println(results.length);
 		DataPoint dp;
+		String recordNumbers = ""; 
 		for(int i = 0; i < results.length; i++) {
 		for (int freq = Harvester.LOWER_LIMIT; freq < Harvester.UPPER_LIMIT-1; freq++) {
 			    //Get the magnitude:
@@ -99,6 +99,51 @@ public class AcousticFingerprinter implements Callable<Map<Long,DataPoint>>{
 		return hashcodes;
 	} 
 	
+	/**
+	 * This method determines the key music points of the transformed input data.
+	 * The most important frequencies in a data line are saved in recordPoints[].
+	 * For the search input, the 'songID' is zero.
+	 **/
+	public static Map<Long,DataPoint> computeAF_DB(Complex[] data, int songID, int time){
+		Map<Long,DataPoint> hashcodes = new HashMap<Long,DataPoint>();
+		DataPoint dp;
+		String recordNumbers = "";
+		for (int freq = Harvester.LOWER_LIMIT; freq < Harvester.UPPER_LIMIT-1; freq++) {
+			    //Get the magnitude:
+			   double mag = Math.log(data[freq].abs() + 1);
+			    //Find out which range we are in:
+			    int index = getIndex(freq);
+			    //Save the highest magnitude and corresponding frequency:
+			    if (mag > highscores[index]) {
+			    	thirdRecordPoints[index] = secondRecordPoints[index];
+			    	secondRecordPoints[index] = recordPoints[index];
+			        highscores[index] = mag;
+			        recordPoints[index] = freq;
+			    }
+		}
+		
+		 //Punkte als Text speichern
+		 for(int k=0; k <5;k++){
+			 recordNumbers = recordNumbers + recordPoints[k] + "," + secondRecordPoints[k] + "," + thirdRecordPoints[k] + "\t";
+			 
+		 }
+		 
+		 //Hashes generieren und mit DataPunkten in HashDB speichern
+		 
+				 dp = new DataPoint(songID, time);
+				 
+		    List<Long> hashes = hash(recordNumbers);
+		    for(int n=0; n<hashes.size();n++){
+			   hashcodes.put(hashes.get(n), dp);	
+		    }
+
+			//Reset recordNumbers
+			recordNumbers = "";
+		
+		//System.out.println("Indexing done!");
+		return hashcodes;
+	}
+	
 	//Find out in which range
 	private static int getIndex(int freq) {
 	    int i = 0;
@@ -114,7 +159,7 @@ public class AcousticFingerprinter implements Callable<Map<Long,DataPoint>>{
 	 * @param keypoints
 	 * @return
 	 */
-	private List<Long> hash(String line) {
+	private static List<Long> hash(String line) {
 	    String[] p = line.split("\t");
 	    List<Long> results = new ArrayList<Long>();
 	    long p1;

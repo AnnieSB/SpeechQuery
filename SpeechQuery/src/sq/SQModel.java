@@ -1,28 +1,23 @@
 package sq;
 
-
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
-import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Observable;
-import java.util.concurrent.Callable;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
 
 import javax.sound.sampled.AudioInputStream;
 import javax.sound.sampled.AudioSystem;
 import javax.sound.sampled.LineUnavailableException;
 import javax.sound.sampled.UnsupportedAudioFileException;
+
+import org.apache.commons.math3.stat.descriptive.moment.StandardDeviation;
 
  
 
@@ -61,31 +56,22 @@ public class SQModel extends Observable{
         //Platzhalter für sample Sprachinput 
         songList.add(0,null); 
         int index = 1; 
-       
-        //ToDo: Datenbank entsprechend speichern! 
         
         System.out.println("Loading speech recordings..."); 
-        long startTime = System.nanoTime();
         File folder = new File(path); 
-        
-        //Thread pool management
-//        ExecutorService afThreads = Executors.newCachedThreadPool();
-//        List<Future<Map<Long,DataPoint>>> fingerprints = new ArrayList<Future<Map<Long,DataPoint>>>();
-        
-        ExecutorService meThreads = Executors.newCachedThreadPool();
-        List<Future<double[]>> mScores = new ArrayList<Future<double[]>>();
-        
-        ExecutorService rdThreads = Executors.newCachedThreadPool();
-        List<Future<double[]>> rScores = new ArrayList<Future<double[]>>();
-        
+               
 		int totalFramesRead;
 		AudioInputStream ais;
 		int bytesPerFrame;
 		int numBytes;
 		byte[] audioBytes;
-		Complex[][] tData;
-		Complex[][] tData_complete;
-		Complex[][] tmp;
+		byte[] tmp;
+		byte[] data_complete;
+        MelodyExtractor me;
+        double[] pitchValues;
+		double[] beats;
+		Map<Long,DataPoint> hashes;
+		long startTime;
         for (File file : folder.listFiles()){ 
             if (file.isFile() && (file.getName().contains(".wav") || file.getName().contains(".mp3"))){ 
                 songList.add(index, file.getName()); 
@@ -95,10 +81,9 @@ public class SQModel extends Observable{
                 bytesPerFrame = ais.getFormat().getFrameSize();
         		numBytes = 44100 * bytesPerFrame;
         		audioBytes = new byte[numBytes];
-        		tData_complete = null;
-        		tData = null;
+        		data_complete = null;
+        		tmp = null;
                 try { 
-                    //fileStream = rc.captureAudioFile(file);
                     int numBytesRead = 0;
         		    int numFramesRead = 0;
         		    // Try to read numBytes bytes from the file.
@@ -106,94 +91,73 @@ public class SQModel extends Observable{
         		      // Calculate the number of frames actually read.
         		      numFramesRead = numBytesRead / bytesPerFrame;
         		      totalFramesRead += numFramesRead;
-        		      // Here, do something useful with the audio data that's 
-        		      // now in the audioBytes array...
-        		      //rhythm detection
-        		      tData = DFT.transform(audioBytes);
-        		      if(tData_complete == null)
-        		    	  tData_complete = tData;
+        		      
+        		      if(data_complete == null)
+        		    	  data_complete = audioBytes;
         		      else{
-        		          tmp = tData_complete;
-        		          tData_complete = new Complex[tmp.length + tData.length][];
-        		          System.arraycopy(tmp, 0, tData_complete, 0, tmp.length);
-        		          System.arraycopy(tData, 0, tData_complete, tmp.length, tData.length);
+        		    	  tmp = data_complete;
+        		    	  data_complete = new byte[tmp.length + audioBytes.length];
+        		    	  System.arraycopy(tmp, 0, data_complete, 0, tmp.length);
+        		          System.arraycopy(audioBytes, 0, data_complete, tmp.length, audioBytes.length);
         		      }
-        		    }
-        		    ais.close();
-                } catch (IOException e) { 
-                    // TODO Auto-generated catch block 
-                    e.printStackTrace(); 
-                } 	
+        		    }ais.close();
+                } catch (IOException e) { e.printStackTrace(); } 	
                 
-//                long startime = System.nanoTime();
-//                //Complex[][] tData = DFT.transform(fileStream);
-//                System.out.println("Transformation time: " + (System.nanoTime() - startime));
-                //Map<Long,DataPoint> tmp = fe.index(fileStream,index); 
+                Complex[][] tData_complete = DFT.transform(data_complete);
                 
-//                Callable<Map<Long,DataPoint>> afWorker = new AcousticFingerprinter(tData_complete,index);
-//                Future<Map<Long,DataPoint>> afSubmit = afThreads.submit(afWorker);
-//                fingerprints.add(afSubmit);
+                //af = new AcousticFingerprinter(tData_complete, index);
+                me = new MelodyExtractor(tData_complete);
+                //rd = new RhythmDetector(tData_complete, index);
                 
-                AcousticFingerprinter af = new AcousticFingerprinter(tData_complete, index);
                 if(index==1)
             		hashDB.add(0,null);
-                startTime = System.nanoTime();
-    			hashDB.add(index, af.computeAF(tData_complete, index));
-    			System.out.println("AF: " + ((System.nanoTime() - startTime)%1000000) + " ms");
                 
-                
-                Callable<double[]> meWorker = new MelodyExtractor(tData_complete);
-                Future<double[]> meSubmit = meThreads.submit(meWorker);
-                mScores.add(meSubmit);
-                
-                Callable<double[]> rdWorker = new RhythmDetector(tData_complete,index);
-                Future<double[]> rdSubmit = rdThreads.submit(rdWorker);
-                rScores.add(rdSubmit);
-      
-//                //melody.recognition 
-//                 melodyScores.put(index, worker.getPitchValues());
-//                //rhythm.detection 
-//                 rhythmScores.put(index, fe.getBeats());
-                 
+    			//Melody extraction:
+    			pitchValues = new double[tData_complete.length];
+    			beats = new double[tData_complete.length];
+    			hashes = new HashMap<Long,DataPoint>();
+    			startTime = System.nanoTime();
+    			Map<Long,DataPoint> tm;
+    			for(int i=0; i<tData_complete.length;i++){
+    				tm = AcousticFingerprinter.computeAF_DB(tData_complete[i], index, i);
+    				hashes.putAll(tm);
+    				pitchValues[i] = me.computePitch(tData_complete[i]);
+    				beats[i] = RhythmDetector.computeRhythm(tData_complete[i]);
+    			}
+    		
+    			hashDB.add(index, hashes);
+				melodyScores.put(index, pitchValues);
+				
+    			System.out.println("Melody+ AF extraction: " + ((System.nanoTime() - startTime)%1000000) + " ms");
+    			startTime = System.nanoTime();
+    			//rhythm
+    			//Normalization
+    			double minVal = beats[0];
+    		    int minIndex = 0;
+    			for(int k=1; k<beats.length;k++){
+    				if( beats[k] < minVal ) {
+    		            minVal = beats[k];
+    		            minIndex = k;
+    		         }
+    			}
+    			StandardDeviation sd = new StandardDeviation();
+    			double o = sd.evaluate(beats);
+    			for(int n=0; n<beats.length;n++){
+    				beats[n] = (beats[n] - beats[minIndex]) / o;
+    			}
+    			rhythmScores.put(index, beats);
+    			System.out.println("Rhythm extraction: " + ((System.nanoTime() - startTime)%1000000 + " ms") + ", Songindex: "+index);
+    			
                 index++; 
             } 
             else{ 
                 System.out.println("File nicht gefunden - " + file.getName()); 
             } 
-            
-//            //am Anfang Platzhalter für Spracheingabe freihalten 
-//            if(index==1) 
-//                hashDB.add(0,null); 
-//            hashDB.add(index,tmp); 
-        }
-//        try {
-//			System.out.println( "FP size: "+ fingerprints.get(2).get().size());
-//		} catch (InterruptedException e1) {
-//			// TODO Auto-generated catch block
-//			e1.printStackTrace();
-//		} catch (ExecutionException e1) {
-//			// TODO Auto-generated catch block
-//			e1.printStackTrace();
-//		}
-        for(int k=0; k<melodyScores.size(); k++){
-//        	if(k==0)
-//        		hashDB.add(0,null);
-        	try {
-				//hashDB.add(k+1, fingerprints.get(k).get());
-				melodyScores.put(k+1,mScores.get(k).get());
-				rhythmScores.put(k+1, rScores.get(k).get());
-			} catch (InterruptedException e) {
-				e.printStackTrace();
-			} catch (ExecutionException e) {
-				e.printStackTrace();
-			}       	
-        }
+                 	
+       }
         
-        System.out.println("Total loading time: " + ((System.nanoTime() - startTime)%1000000) + " ms");
         System.out.println("Song DataBase loaded! " + "Total: " + (hashDB.size()-1) + ". "); 
-        //afThreads.shutdown();
-        meThreads.shutdown();
-        rdThreads.shutdown();
+        
     } 
 
     /** 
@@ -209,7 +173,6 @@ public class SQModel extends Observable{
         int tmp = 0; 
         // speichert SongID und Offset -> DataPoint und jeweilige Anzahl
         Map<String, Integer> matches = new HashMap<String, Integer>();
-        boolean inserted = false;
         int matchCount = 1;
         //DataPoint newMatch;
         String matchHash = "";
@@ -222,7 +185,7 @@ public class SQModel extends Observable{
                         if(entryDB.getKey().equals(entry.getKey())){ 
                         	//Offset berechnen
                             tmp =  Math.abs(entryDB.getValue().getTime() - entry.getValue().getTime()); 
-                            matchHash = matchHash + entryDB.getValue().getSongId() + "," + tmp;
+                            matchHash = entryDB.getValue().getSongId() + "," + tmp;
                             if(matches.containsKey(matchHash)){
                             	matchCount = matches.get(matchHash) + 1;
                             	matches.remove(matchHash);
@@ -249,71 +212,129 @@ public class SQModel extends Observable{
         } 
         System.out.println(matches.size());
         
-        String matchesFound = sortByOccurrence(matches); 
+        String matchesFound = rank(matches); 
           
         return matchesFound;     
         }
     
+    static List<Integer> matchIds;
+    static List<Integer> matchCount;
     /** 
      * This method sort the map containing all the matching candidates by an descending order and returns a String  
      * representation of it. 
      * @param matches 
      * @return 
      */
-    private String sortByOccurrence(Map<String,Integer> matches){ 
+    private String rank(Map<String,Integer> matches){ 
         //sortieren 
+    	matchIds = new ArrayList<Integer>();
+    	matchCount = new ArrayList<Integer>();
+        sortAF(matches);
         
-        Map<String,Integer> sortedMap = sortDESC(matches);
-          
-        String resultString; 
-        if(sortedMap.size() != 0){ 
-            if(sortedMap.size() == 1) 
-                resultString = "Match found: " +  "\n"; 
-            else
-                resultString = "Matches found: " +  "\n"; 
-        int songID = 0; 
-        for(Map.Entry<String,Integer> entry : sortedMap.entrySet()){ 
-        	String[] songIds = entry.getKey().split(",");
-            songID = Integer.parseInt(songIds[0]); 
-            //if(!resultString.contains("" + songID)) 
-            if(entry.getValue() == 1) 
-                resultString = resultString + songList.get(songID) + " with " + entry.getValue() + " match." + "\n"; 
-            else
-                resultString = resultString + songList.get(songID) + " with " + entry.getValue() + " matches." + "\n"; 
-        } 
-        } 
-        else{ 
-            resultString = "No matches found! \n"; 
-        } 
+        
+        String resultString = ""; 
+//        if(sortedMap.size() != 0){ 
+//            if(sortedMap.size() == 1) 
+//                resultString = "Match found: " +  "\n"; 
+//            else
+//                resultString = "Matches found: " +  "\n"; 
+//        int songID = 0; 
+//        for(Map.Entry<String,Integer> entry : sortedMap.entrySet()){ 
+//        	String[] songIds = entry.getKey().split(",");
+//            songID = Integer.parseInt(songIds[0]); 
+//            //if(!resultString.contains("" + songID)) 
+//            if(entry.getValue() == 1) 
+//                resultString = resultString + songList.get(songID) + " with " + entry.getValue() + " match." + "\n"; 
+//            else
+//                resultString = resultString + songList.get(songID) + " with " + entry.getValue() + " matches." + "\n"; 
+//        } 
+//        } 
+//        else{ 
+//            resultString = "No matches found! \n"; 
+//        } 
         return resultString; 
     } 
     
+
+    
     /**
-     * Sorts by descending Order.
+     * Sorts by fingerprint on descending order.
      * @param unsortMap
      * @return
      */
-    private static Map<String, Integer> sortDESC(Map<String, Integer> unsortMap){
+    private static void sortAF(Map<String, Integer> unsortMap){
         List<Entry<String, Integer>> list = new LinkedList<Entry<String, Integer>>(unsortMap.entrySet());
 
         // Sorting the list based on values
         Collections.sort(list, new Comparator<Entry<String, Integer>>(){
         	
             public int compare(Entry<String, Integer> o1,Entry<String, Integer> o2){
+//            	    int r = o2.getValue().compareTo(o1.getValue());
+//            	    
+//            	    if(r == 0){
+//            	    	int key1 = Integer.parseInt(o1.getKey().split(",")[0]);
+//            	    	int key2 = Integer.parseInt(o2.getKey().split(",")[0]);
+//            	    	r = (key1-key2);
+//            	    }
                     return o2.getValue().compareTo(o1.getValue());
             }
         });
 
         // Maintaining insertion order with the help of LinkedList
-        Map<String, Integer> sortedMap = new LinkedHashMap<String, Integer>();
-        for (Entry<String, Integer> entry : list){
-            sortedMap.put(entry.getKey(), entry.getValue());
+//        Map<String, Integer> sortedMap = new LinkedHashMap<String, Integer>();
+//        String t1;
+//        boolean in = false;
+//        for (Entry<String, Integer> entry : list){
+//        	String[] tmp = entry.getKey().split(",");
+//        	t1 = tmp[0];
+//        	for(String hash : sortedMap.keySet()){
+//        		if(hash.contains(t1)){
+//        		   in = true;
+//        		   break;
+//        		}
+//        	}
+//        	if(!in)
+//                sortedMap.put(entry.getKey(), entry.getValue());
+//        	in = false;
+//        }
+       
+        String t1;
+        boolean in = false;
+        for(Entry<String,Integer> entry : list){
+        	t1 = entry.getKey().split(",")[0];
+        	if(matchIds.contains(Integer.parseInt(t1)))
+        		in = true;
+        	if(!in){
+        		matchIds.add(Integer.parseInt(t1));
+        		matchCount.add(entry.getValue());
+        	}
+        	
         }
-        return sortedMap;
     }
     
-    private void sortByMelodyScore(){
+    private void sortByMelodyScore(List<Integer> matchIDs){
+    	// Melody of Input double[]
+    	DTW dtw;
+    	double[] costs = new double[matchIDs.size()];
+    	for(int i=0; i<matchIDs.size(); i++){
+    		//dtw = new DTW(melodyScores.get(matchIDs.get(i)));
+    		//costs[i] = dtw.cost(melodyScores.get(matchIDs.get(i)).length,);
+    	}
     	
+    	//index of cost  -> matchIDs.get(i) = AFRanking!
+    	int[] melodyRank = new int[matchIDs.size()];
+    	for(int a=0; a<matchIDs.size(); a++){
+    		melodyRank[a] = matchIDs.get(a);
+    	}
+    	int tmp;
+    	for(int i=0; i<costs.length-1; i++){
+			if(costs[i] > costs[i+1]){
+				//switch
+				tmp = melodyRank[i];
+				melodyRank[i] = melodyRank[i+1];
+				melodyRank[i+1] = tmp;
+			}
+		}
     }
     
     private void sortByRhythmScore(){

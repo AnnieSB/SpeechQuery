@@ -22,33 +22,37 @@ public class DFT {
 		//When turning into frequency domain we'll need complex numbers:
 		Complex[][] results = new Complex[amountPossible][];
 		//For all the chunks:
-		//Complex[] tmp;
+		FFT fft = new FFT(Harvester.CHUNK_SIZE);
+		Complex[] tmp;
+		double[] re;
+		double[] im; 
 		for(int times = 0;times < amountPossible; times++) {
-		    Complex[] complex = new Complex[Harvester.CHUNK_SIZE];
+		    //Complex[] complex = new Complex[Harvester.CHUNK_SIZE];
+			re = new double[Harvester.CHUNK_SIZE];
+			im = new double[Harvester.CHUNK_SIZE];
 		    for(int i = 0;i < Harvester.CHUNK_SIZE;i++) {
 		        //Put the time domain data into a complex number with imaginary part as 0:
-		        complex[i] = new Complex(audio[(times*Harvester.CHUNK_SIZE)+i], 0);
-		      //apply Hamming window
+//		        complex[i] = new Complex(audio[(times*Harvester.CHUNK_SIZE)+i], 0);
+//		      //apply Hamming window
+//		        if(window.length != 0)
+//		        complex[i].setRe(complex[i].re() * window[i]) ;
+		        
+		        re[i] = audio[(times*Harvester.CHUNK_SIZE)+i];
+		        im[i] = 0;
 		        if(window.length != 0)
-		        complex[i].setRe(complex[i].re() * window[i]) ;
+			        re[i] = (re[i] * window[i]) ;
 
 		    }
 		    //Perform FFT analysis on the chunk:
-		    results[times] = FFT_princeton.fft(complex);
-//		    double[] x = new double[complex.length];
-//		    double[] y = new double[complex.length];
-//		    for(int z=0; z<complex.length; z++){
-//		    	x[z] = complex[z].re();
-//		    	y[z] = complex[z].im();
-//		    }
-//		    FFT fft = new FFT(complex.length);
-//		    fft.fft(x,y);
-//		    tmp = new Complex[complex.length];
-//		    for(int o =0; o<complex.length; o++){
-//		    	Complex c = new Complex(x[o],y[o]);
-//		    	tmp[o] = c;
-//		    }
-//		    results[times] = tmp;
+		    //results[times] = FFT_princeton.fft(complex);
+		    
+		    
+		    fft.fft(re,im);
+		    tmp = new Complex[Harvester.CHUNK_SIZE];
+		    for(int o =0; o<Harvester.CHUNK_SIZE; o++){
+		    	tmp[o] = new Complex(re[o],im[o]);
+		    }
+		    results[times] = tmp;
 		}
 		return results;
 	}

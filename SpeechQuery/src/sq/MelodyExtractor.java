@@ -52,7 +52,7 @@ public class MelodyExtractor implements Callable<double[]>{
 	 * @param data
 	 * @return the Pitch value of one Chunk
 	 */
-	private double computePitch(Complex[] data){
+	public double computePitch(Complex[] data){
 	
 		 //find the peak
 		      double maxVal = -1;

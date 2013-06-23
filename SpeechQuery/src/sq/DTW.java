@@ -19,6 +19,12 @@ public class DTW {
 	}
 	
 	double cost = 0;
+	/**
+	 * 
+	 * @param n size of s1
+	 * @param m size of s2
+	 * @return
+	 */
 	public double cost (int n, int m){
 		if(n>=0 && m>=0)
 		   cost = Math.abs(s1[n]-s2[m]) * E + Math.min(Math.min(cost(n-2,m-1),cost(n-1,m-1)),cost(n-1,m-2));
